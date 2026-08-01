@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estante — seu leitor de ebooks</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="screen-login">
+  <div class="login-card">
+    <div class="login-brand"><div class="lamp"></div><span>Estante</span></div>
+    <div class="login-sub" id="login-sub">Sua biblioteca pessoal. Entre para ver os livros salvos neste navegador.</div>
+    <div class="field"><label>Nome de usuário</label><input id="in-user" placeholder="ex: andre"></div>
+    <div class="field hidden" id="field-pass2"><label>Confirme uma frase-senha (opcional)</label><input id="in-pass2" placeholder="apenas para não misturar contas"></div>
+    <div class="err" id="login-err"></div>
+    <button class="btn btn-primary btn-block" id="btn-login">Entrar na estante</button>
+    <div class="login-toggle" id="login-toggle-wrap">Primeira vez aqui? <a id="login-toggle">Criar minha estante</a></div>
+    <div class="login-note">📚 Este app guarda tudo <b>localmente, neste navegador</b> (localStorage) — não existe um servidor por trás. Use "Exportar biblioteca" em Configurações para fazer backup ou levar seus livros para outro aparelho.</div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="screen-app">
+  <div id="rail">
+    <div class="rail-brand"><div class="lamp"></div></div>
+    <button class="rail-btn active" data-view="shelf">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v16M9 4v16M14 4l4 16M20 4v16"/></svg>
+      Estante
+    </button>
+    <button class="rail-btn" data-view="stats">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      Stats
+    </button>
+    <button class="rail-btn" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09c0 .68.39 1.3 1 1.51.59.24 1.27.12 1.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06c-.45.55-.57 1.23-.33 1.82.21.61.83 1 1.51 1H21a2 2 0 010 4h-.09c-.68 0-1.3.39-1.51 1z"/></svg>
+      Ajustes
+    </button>
+    <div class="rail-spacer"></div>
+    <button class="rail-btn" id="btn-logout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      Sair
+    </button>
+  </div>
+
+  <div id="main">
+
+    <!-- ---- SHELF ---- -->
+    <div class="view active" id="view-shelf">
+      <div class="view-header shelf-header">
+        <div class="shelf-brand-row">
+          <div class="shelf-name-edit">
+            <h1 id="shelf-name">Estante</h1>
+            <button class="btn-rename" id="btn-rename-shelf" title="Dar um nome à sua estante">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+            </button>
+            <span class="count" id="shelf-count"></span>
+          </div>
+          <button class="btn-plus" id="btn-add-book-top" title="Adicionar livro">+</button>
+        </div>
+        <div class="shelf-menu-row">
+          <div class="menu-seg">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input id="shelf-search" placeholder="Buscar por título ou autor…">
+            </div>
+          </div>
+          <div class="menu-divider"></div>
+          <div class="menu-seg">
+            <span class="menu-seg-label">Status</span>
+            <select class="filter" id="shelf-filter">
+              <option value="todos">Todos</option>
+              <option value="lendo">Lendo</option>
+              <option value="concluidos">Concluídos</option>
+              <option value="naoiniciados">Não iniciados</option>
+              <option value="favoritos">Favoritos</option>
+            </select>
+          </div>
+          <div class="menu-divider"></div>
+          <div class="menu-seg">
+            <span class="menu-seg-label">Organizar</span>
+            <select class="filter" id="shelf-sort">
+              <option value="recentes">Recentes</option>
+              <option value="titulo">Título A–Z</option>
+              <option value="progresso">Progresso</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="shelf-wrap" id="shelf-wrap"></div>
+    </div>
+
+    <!-- ---- STATS ---- -->
+    <div class="view" id="view-stats">
+      <div class="view-header"><div class="view-title">Estatísticas de leitura</div></div>
+      <div class="stat-grid" id="stat-grid"></div>
+      <div class="week-chart" id="week-chart"></div>
+      <div class="goal-box" id="goal-box"></div>
+    </div>
+
+    <!-- ---- SETTINGS ---- -->
+    <div class="view" id="view-settings">
+      <div class="view-header"><div class="view-title">Configurações</div></div>
+      <div class="settings-block">
+        <h4>Conta</h4>
+        <div class="settings-row"><div><div id="acc-name">—</div><div class="d">Dados salvos neste navegador</div></div><button class="btn btn-ghost" id="btn-logout2">Sair</button></div>
+      </div>
+      <div class="settings-block">
+        <h4>Biblioteca</h4>
+        <div class="settings-row"><div><div>Exportar biblioteca</div><div class="d">Baixa um arquivo .json com metadados, notas e destaques (os arquivos dos livros ficam de fora para manter o backup leve)</div></div><button class="btn btn-ghost" id="btn-export">Exportar</button></div>
+        <div class="settings-row"><div><div>Meta diária de leitura</div><div class="d">Usada na tela de estatísticas</div></div>
+          <select class="filter" id="in-goal"><option value="10">10 min</option><option value="20">20 min</option><option value="30">30 min</option><option value="60">60 min</option></select>
+        </div>
+        <div class="settings-row"><div><div>Apagar todos os dados desta conta</div><div class="d">Ação permanente, sem confirmação de servidor</div></div><button class="btn btn-ghost" id="btn-wipe" style="color:var(--red);border-color:var(--red)">Apagar</button></div>
+      </div>
+      <div class="settings-block">
+        <h4>Sobre</h4>
+        <div style="font-size:12.5px;color:var(--muted);line-height:1.6;">Estante é um leitor de PDF, TXT e EPUB (texto) que roda inteiramente no seu navegador. Suporte a EPUB é simplificado: extrai o texto dos capítulos, sem preservar imagens ou layout original do livro.</div>
+      </div>
+    </div>
+
+    <!-- ---- READER ---- -->
+    <div class="view" id="view-reader">
+      <div class="reader-shell">
+        <div class="reader-top">
+          <button class="icon-btn" id="btn-back-shelf" title="Voltar à estante">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-toc" title="Sumário">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-search" title="Buscar no livro">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          </button>
+          <div class="reader-title"><b id="reader-title-b"></b></div>
+          <button class="icon-btn" id="btn-tts" title="Ouvir esta página">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19 12a7 7 0 00-3-5.7M17 12a4 4 0 00-1.5-3"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-bookmark" title="Salvar marcador aqui">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-notes" title="Anotações e destaques">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-display" title="Aparência da leitura">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-finish" title="Marcar como concluído">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+          </button>
+        </div>
+        <div class="reader-body">
+          <div class="reader-page-area" id="reader-page-area">
+            <div class="reader-tap left" id="tap-left"></div>
+            <div class="reader-tap right" id="tap-right"></div>
+            <div class="text-pane-outer hidden" id="text-pane-outer"><div class="text-pane" id="text-pane"></div></div>
+            <div class="pdf-pane-outer hidden" id="pdf-pane-outer"><div class="pdf-page-wrap" id="pdf-page-wrap"><canvas id="pdf-canvas"></canvas><div class="pdf-textlayer" id="pdf-textlayer"></div></div></div>
+          </div>
+          <div class="reader-side collapsed" id="reader-side">
+            <div class="side-head"><h4 id="side-title">Sumário</h4><button class="icon-btn" id="btn-side-close">✕</button></div>
+            <div class="side-body" id="side-body"></div>
+          </div>
+        </div>
+        <div class="reader-bottom">
+          <span id="reader-pos-lbl">–</span>
+          <div class="bottom-bar-track"><i id="reader-pos-bar" style="width:0%"></i></div>
+          <span id="reader-pct-lbl">0%</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- selection toolbar -->
+<div id="sel-toolbar">
+  <button data-hl="amarelo" title="Destaque amarelo"><span class="dot" style="background:#e0a458"></span></button>
+  <button data-hl="verde" title="Destaque verde"><span class="dot" style="background:#5ab578"></span></button>
+  <button data-hl="azul" title="Destaque azul"><span class="dot" style="background:#5e96e0"></span></button>
+  <button data-hl="roxo" title="Destaque roxo"><span class="dot" style="background:#b278e0"></span></button>
+  <div class="sep"></div>
+  <button id="sel-note" title="Adicionar nota">📝</button>
+  <button id="sel-copy" title="Copiar">⧉</button>
+</div>
+
+<!-- ================= MODALS (templates, cloned/injected via JS) ================= -->
+<div id="modal-root"></div>
+
+<script src="js/app.js" defer></script>
+</body>
+</html>
