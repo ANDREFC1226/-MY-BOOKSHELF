@@ -1,8 +1,10 @@
 # Estante — leitor de ebooks (PDF, TXT, EPUB)
 
-App de leitura no estilo Kindle, 100% front-end (HTML + CSS + JavaScript puro),
-sem servidor e sem backend. Os dados de cada conta (livros, destaques, notas,
-marcadores, progresso, estatísticas) ficam salvos no `localStorage` do navegador.
+App de leitura no estilo Kindle, feito em HTML + CSS + JavaScript puro no front-end,
+com **Supabase** cuidando do backend: autenticação por e-mail/senha, banco de dados
+(Postgres) para livros/destaques/notas/estatísticas, e Storage para os arquivos PDF.
+Isso significa que sua estante sincroniza sozinha entre qualquer aparelho — basta
+entrar com o mesmo e-mail.
 
 ## Estrutura do projeto
 
