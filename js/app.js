@@ -6,25 +6,34 @@ if(window.pdfjsLib){
 }
 
 /* ==================================================================
-   UTILIDADES / STORAGE
+   SUPABASE — preencha com os dados do SEU projeto (Settings > API)
    ================================================================== */
-const LS = window.localStorage;
+const SUPABASE_URL = 'COLOQUE_AQUI_A_PROJECT_URL';
+const SUPABASE_ANON_KEY = 'COLOQUE_AQUI_A_ANON_PUBLIC_KEY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const BOOKS_BUCKET = 'livros';
+
 const uid = () => 'id' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayKey = (d=new Date()) => d.toISOString().slice(0,10);
 const escapeHtml = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-function usersDB(){ return JSON.parse(LS.getItem('estante_users')||'{}'); }
-function saveUsersDB(db){ LS.setItem('estante_users', JSON.stringify(db)); }
-function dataKey(u){ return 'estante_data_' + u; }
-function loadUserData(u){
-  const raw = LS.getItem(dataKey(u));
-  if(raw) return JSON.parse(raw);
+async function loadUserData(){
+  const { data, error } = await sb.from('user_data').select('data').eq('user_id', state.userId).maybeSingle();
+  if(error){ console.error('Erro ao carregar dados', error); }
+  if(data && data.data) return data.data;
   return { books:{}, settings:{ theme:'claro', font:'serif', fontSize:19, lineHeight:1.8, goal:20, shelfName:'Estante' }, stats:{ totalMinutes:0, dailyLog:{} } };
 }
-function saveUserData(){ if(state.user) LS.setItem(dataKey(state.user), JSON.stringify(state.data)); }
+function saveUserData(){
+  if(!state.userId) return;
+  // fire-and-forget: não precisa de await nos lugares que já chamavam saveUserData()
+  sb.from('user_data').upsert({ user_id: state.userId, data: state.data, updated_at: new Date().toISOString() }).then(({error})=>{
+    if(error){ console.error('Erro ao salvar no Supabase', error); }
+  });
+}
 
 const state = {
-  user:null,
+  userId:null,
+  userEmail:null,
   data:null,
   currentBookId:null,
   pdfDoc:null,
@@ -41,24 +50,24 @@ const state = {
 };
 
 /* ==================================================================
-   LOGIN
+   LOGIN (Supabase Auth por e-mail/senha)
    ================================================================== */
 let isCreating = false;
 const elLoginSub = document.getElementById('login-sub');
 const elToggle = document.getElementById('login-toggle');
 const elToggleWrap = document.getElementById('login-toggle-wrap');
-const elPass2 = document.getElementById('field-pass2');
+const elPassConfirm = document.getElementById('field-pass-confirm');
 const elErr = document.getElementById('login-err');
 
 function refreshLoginMode(){
   if(isCreating){
-    elLoginSub.textContent = 'Escolha um nome para sua estante. Tudo fica salvo neste navegador.';
-    elPass2.classList.remove('hidden');
+    elLoginSub.textContent = 'Crie sua conta para acessar sua estante em qualquer aparelho.';
+    elPassConfirm.classList.remove('hidden');
     elToggleWrap.innerHTML = 'Já tem uma estante aqui? <a id="login-toggle">Entrar</a>';
     document.getElementById('btn-login').textContent = 'Criar minha estante';
   } else {
-    elLoginSub.textContent = 'Sua biblioteca pessoal. Entre para ver os livros salvos neste navegador.';
-    elPass2.classList.add('hidden');
+    elLoginSub.textContent = 'Sua biblioteca pessoal, sincronizada em qualquer aparelho. Entre com seu e-mail.';
+    elPassConfirm.classList.add('hidden');
     elToggleWrap.innerHTML = 'Primeira vez aqui? <a id="login-toggle">Criar minha estante</a>';
     document.getElementById('btn-login').textContent = 'Entrar na estante';
   }
@@ -66,29 +75,52 @@ function refreshLoginMode(){
 }
 refreshLoginMode();
 
-document.getElementById('btn-login').addEventListener('click', ()=>{
-  const u = document.getElementById('in-user').value.trim().toLowerCase();
+document.getElementById('btn-login').addEventListener('click', async ()=>{
+  const email = document.getElementById('in-user').value.trim().toLowerCase();
+  const pass = document.getElementById('in-pass').value;
   elErr.textContent = '';
-  if(!u){ elErr.textContent = 'Digite um nome de usuário.'; return; }
-  const db = usersDB();
-  if(isCreating){
-    if(db[u]){ elErr.textContent = 'Esse nome já existe. Tente entrar em vez de criar.'; return; }
-    db[u] = { createdAt: Date.now() };
-    saveUsersDB(db);
-  } else {
-    if(!db[u]){ elErr.textContent = 'Não encontramos essa estante neste navegador. Crie uma nova.'; return; }
+  if(!email){ elErr.textContent = 'Digite seu e-mail.'; return; }
+  if(!pass || pass.length < 6){ elErr.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true;
+  try{
+    if(isCreating){
+      const confirmPass = document.getElementById('in-pass-confirm').value;
+      if(pass !== confirmPass){ elErr.textContent = 'As senhas não coincidem.'; return; }
+      const { data, error } = await sb.auth.signUp({ email, password: pass });
+      if(error){ elErr.textContent = traduzErroAuth(error.message); return; }
+      if(data.user && !data.session){
+        elErr.textContent = '';
+        alert('Conta criada! Verifique seu e-mail para confirmar antes de entrar.');
+        isCreating = false; refreshLoginMode();
+        return;
+      }
+    } else {
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+      if(error){ elErr.textContent = traduzErroAuth(error.message); return; }
+    }
+    await afterAuth();
+  } finally {
+    btn.disabled = false;
   }
-  doLogin(u);
 });
+function traduzErroAuth(msg){
+  if(/already registered/i.test(msg)) return 'Esse e-mail já tem uma conta. Tente entrar em vez de criar.';
+  if(/invalid login credentials/i.test(msg)) return 'E-mail ou senha incorretos.';
+  if(/email not confirmed/i.test(msg)) return 'Confirme seu e-mail antes de entrar (verifique sua caixa de entrada).';
+  return msg;
+}
 
-function doLogin(u){
-  state.user = u;
-  state.data = loadUserData(u);
+async function afterAuth(){
+  const { data:{ user } } = await sb.auth.getUser();
+  if(!user) return;
+  state.userId = user.id;
+  state.userEmail = user.email;
+  state.data = await loadUserData();
   if(!state.data.settings.shelfName) state.data.settings.shelfName = 'Estante';
-  LS.setItem('estante_session', u);
   document.getElementById('screen-login').style.display='none';
   document.getElementById('screen-app').classList.add('active');
-  document.getElementById('acc-name').textContent = '@' + u;
+  document.getElementById('acc-name').textContent = state.userEmail;
   document.getElementById('in-goal').value = String(state.data.settings.goal || 20);
   renderShelfName();
   renderShelf();
@@ -97,17 +129,17 @@ function doLogin(u){
 
 document.getElementById('btn-logout').addEventListener('click', doLogout);
 document.getElementById('btn-logout2').addEventListener('click', doLogout);
-function doLogout(){
+async function doLogout(){
   stopReadTimer();
   saveUserData();
-  LS.removeItem('estante_session');
+  await sb.auth.signOut();
   location.reload();
 }
 
-// auto-login if session exists
-(function autoLogin(){
-  const s = LS.getItem('estante_session');
-  if(s && usersDB()[s]) doLogin(s);
+// mantém a sessão entre visitas (o Supabase guarda o token sozinho)
+(async function autoLogin(){
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session) await afterAuth();
 })();
 
 /* ==================================================================
@@ -293,11 +325,8 @@ async function addBookFromFile(file, title, author){
     progress:{ percent:0, location:null }, highlights:[], notes:[], bookmarks:[], finishedAt:null
   };
   if(ext==='pdf'){
-    const dataUrl = await fileToDataURL(file);
-    book.fileData = dataUrl;
-    // gera capa a partir da 1a página
     try{
-      const buf = await (await fetch(dataUrl)).arrayBuffer();
+      const buf = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({data:buf}).promise;
       const page = await pdf.getPage(1);
       const vp = page.getViewport({scale:0.6});
@@ -306,13 +335,17 @@ async function addBookFromFile(file, title, author){
       book.cover = canvas.toDataURL('image/jpeg',0.82);
       book.totalUnits = pdf.numPages;
     }catch(e){ console.warn('capa pdf falhou', e); }
+    const path = `${state.userId}/${id}.pdf`;
+    const { error: upErr } = await sb.storage.from(BOOKS_BUCKET).upload(path, file, { upsert:true, contentType:'application/pdf' });
+    if(upErr) throw upErr;
+    book.filePath = path; // o arquivo em si fica no Storage, só o caminho vai no jsonb
   } else if(ext==='txt'){
     book.fileData = await fileToText(file);
   } else if(ext==='epub'){
     const buf = await fileToArrayBuffer(file);
     const zip = await JSZip.loadAsync(buf);
     const chapters = await extractEpubChapters(zip);
-    book.fileData = JSON.stringify(chapters);
+    book.fileData = chapters; // array salvo direto, sem JSON.stringify
   }
   state.data.books[id] = book;
   saveUserData();
@@ -391,7 +424,9 @@ document.getElementById('btn-back-shelf').addEventListener('click', ()=>{
 
 /* ---- PDF ---- */
 async function loadPdf(b){
-  const buf = await (await fetch(b.fileData)).arrayBuffer();
+  const { data, error } = await sb.storage.from(BOOKS_BUCKET).download(b.filePath);
+  if(error){ alert('Não consegui baixar o PDF: ' + error.message); return; }
+  const buf = await data.arrayBuffer();
   state.pdfDoc = await pdfjsLib.getDocument({data:buf}).promise;
   state.pdfPageCache = {};
   b.totalUnits = state.pdfDoc.numPages;
@@ -474,7 +509,7 @@ function loadTxt(b){
 }
 /* ---- EPUB ---- */
 function loadEpub(b){
-  state.epubChapters = JSON.parse(b.fileData);
+  state.epubChapters = b.fileData;
   const loc = b.progress.location || {chapter:0, page:0};
   state.epubChapterIndex = Math.min(loc.chapter||0, state.epubChapters.length-1);
   loadEpubChapterPages();
@@ -904,14 +939,16 @@ document.getElementById('in-goal').addEventListener('change', e=>{ state.data.se
    ================================================================== */
 document.getElementById('btn-export').addEventListener('click', ()=>{
   const light = JSON.parse(JSON.stringify(state.data));
-  Object.values(light.books).forEach(b=>{ delete b.fileData; delete b.cover; });
+  Object.values(light.books).forEach(b=>{ delete b.filePath; delete b.fileData; delete b.cover; });
   const blob = new Blob([JSON.stringify(light,null,2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'estante-'+state.user+'.json'; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'estante-'+state.userEmail+'.json'; a.click();
 });
-document.getElementById('btn-wipe').addEventListener('click', ()=>{
+document.getElementById('btn-wipe').addEventListener('click', async ()=>{
   if(!confirm('Tem certeza? Isso vai apagar todos os livros, destaques e notas desta conta, sem volta.')) return;
-  LS.removeItem(dataKey(state.user));
-  state.data = loadUserData(state.user);
+  const paths = Object.values(state.data.books).filter(b=>b.format==='pdf' && b.filePath).map(b=>b.filePath);
+  if(paths.length) await sb.storage.from(BOOKS_BUCKET).remove(paths);
+  await sb.from('user_data').delete().eq('user_id', state.userId);
+  state.data = await loadUserData();
   renderShelf(); renderStats();
 });
 
