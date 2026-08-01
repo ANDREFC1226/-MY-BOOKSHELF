@@ -8,8 +8,8 @@ if(window.pdfjsLib){
 /* ==================================================================
    SUPABASE — preencha com os dados do SEU projeto (Settings > API)
    ================================================================== */
-const SUPABASE_URL = 'COLOQUE_AQUI_A_PROJECT_URL';
-const SUPABASE_ANON_KEY = 'COLOQUE_AQUI_A_ANON_PUBLIC_KEY';
+const SUPABASE_URL = 'https://aohdaegzviyqbwejwwfq.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_aXMcNtIdJZGBoRVUkyI74Q_VBevt3cg';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const BOOKS_BUCKET = 'livros';
 
