@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -16,13 +17,14 @@
 <div id="screen-login">
   <div class="login-card">
     <div class="login-brand"><div class="lamp"></div><span>Estante</span></div>
-    <div class="login-sub" id="login-sub">Sua biblioteca pessoal. Entre para ver os livros salvos neste navegador.</div>
-    <div class="field"><label>Nome de usuário</label><input id="in-user" placeholder="ex: andre"></div>
-    <div class="field hidden" id="field-pass2"><label>Confirme uma frase-senha (opcional)</label><input id="in-pass2" placeholder="apenas para não misturar contas"></div>
+    <div class="login-sub" id="login-sub">Sua biblioteca pessoal, sincronizada em qualquer aparelho. Entre com seu e-mail.</div>
+    <div class="field"><label>E-mail</label><input id="in-user" type="email" placeholder="seu@email.com"></div>
+    <div class="field"><label>Senha</label><input id="in-pass" type="password" placeholder="mínimo 6 caracteres"></div>
+    <div class="field hidden" id="field-pass-confirm"><label>Confirme a senha</label><input id="in-pass-confirm" type="password"></div>
     <div class="err" id="login-err"></div>
     <button class="btn btn-primary btn-block" id="btn-login">Entrar na estante</button>
     <div class="login-toggle" id="login-toggle-wrap">Primeira vez aqui? <a id="login-toggle">Criar minha estante</a></div>
-    <div class="login-note">📚 Este app guarda tudo <b>localmente, neste navegador</b> (localStorage) — não existe um servidor por trás. Use "Exportar biblioteca" em Configurações para fazer backup ou levar seus livros para outro aparelho.</div>
+    <div class="login-note">📚 Sua estante agora fica salva na nuvem (Supabase) — abra o mesmo link em qualquer aparelho e entre com o mesmo e-mail para ver seus livros. Sua senha nunca é vista por nós, o Supabase cuida da autenticação.</div>
   </div>
 </div>
 
@@ -109,7 +111,7 @@
       <div class="view-header"><div class="view-title">Configurações</div></div>
       <div class="settings-block">
         <h4>Conta</h4>
-        <div class="settings-row"><div><div id="acc-name">—</div><div class="d">Dados salvos neste navegador</div></div><button class="btn btn-ghost" id="btn-logout2">Sair</button></div>
+        <div class="settings-row"><div><div id="acc-name">—</div><div class="d">Sincronizado na nuvem via Supabase</div></div><button class="btn btn-ghost" id="btn-logout2">Sair</button></div>
       </div>
       <div class="settings-block">
         <h4>Biblioteca</h4>
@@ -117,7 +119,7 @@
         <div class="settings-row"><div><div>Meta diária de leitura</div><div class="d">Usada na tela de estatísticas</div></div>
           <select class="filter" id="in-goal"><option value="10">10 min</option><option value="20">20 min</option><option value="30">30 min</option><option value="60">60 min</option></select>
         </div>
-        <div class="settings-row"><div><div>Apagar todos os dados desta conta</div><div class="d">Ação permanente, sem confirmação de servidor</div></div><button class="btn btn-ghost" id="btn-wipe" style="color:var(--red);border-color:var(--red)">Apagar</button></div>
+        <div class="settings-row"><div><div>Apagar todos os dados desta conta</div><div class="d">Ação permanente — remove seus livros da nuvem também</div></div><button class="btn btn-ghost" id="btn-wipe" style="color:var(--red);border-color:var(--red)">Apagar</button></div>
       </div>
       <div class="settings-block">
         <h4>Sobre</h4>
