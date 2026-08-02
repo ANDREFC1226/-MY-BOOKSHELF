@@ -15,12 +15,15 @@
 
 <!-- ================= LOGIN ================= -->
 <div id="screen-login">
+  <div class="sky-glow"></div>
+  <div class="mountains-back"></div>
+  <div class="mountains-front"></div>
   <div class="login-card">
     <div class="login-brand"><div class="lamp"></div><span>Estante</span></div>
     <div class="login-sub" id="login-sub">Sua biblioteca pessoal, sincronizada em qualquer aparelho. Entre com seu e-mail.</div>
-    <div class="field"><label>E-mail</label><input id="in-user" type="email" placeholder="seu@email.com"></div>
-    <div class="field"><label>Senha</label><input id="in-pass" type="password" placeholder="mínimo 6 caracteres"></div>
-    <div class="field hidden" id="field-pass-confirm"><label>Confirme a senha</label><input id="in-pass-confirm" type="password"></div>
+    <div class="field"><label>E-mail</label><input id="in-user" type="email" placeholder="seu@email.com" data-enter-submit="btn-login"></div>
+    <div class="field"><label>Senha</label><input id="in-pass" type="password" placeholder="mínimo 6 caracteres" data-enter-submit="btn-login"></div>
+    <div class="field hidden" id="field-pass-confirm"><label>Confirme a senha</label><input id="in-pass-confirm" type="password" data-enter-submit="btn-login"></div>
     <div class="err" id="login-err"></div>
     <button class="btn btn-primary btn-block" id="btn-login">Entrar na estante</button>
     <div class="login-toggle" id="login-toggle-wrap">Primeira vez aqui? <a id="login-toggle">Criar minha estante</a></div>
