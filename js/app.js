@@ -13,6 +13,21 @@ const SUPABASE_ANON_KEY = 'COLOQUE_AQUI_A_ANON_PUBLIC_KEY';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const BOOKS_BUCKET = 'livros';
 
+/* ==================================================================
+   ENTER CONFIRMA — funciona em qualquer input de uma linha do site que
+   tenha o atributo data-enter-submit="id-do-botao". Textareas não entram
+   aqui de propósito (Enter neles deve quebrar linha, não confirmar).
+   ================================================================== */
+document.addEventListener('keydown', e=>{
+  if(e.key !== 'Enter') return;
+  const el = e.target;
+  if(!el || el.tagName === 'TEXTAREA') return;
+  const btnId = el.getAttribute('data-enter-submit');
+  if(!btnId) return;
+  const btn = document.getElementById(btnId);
+  if(btn && !btn.disabled){ e.preventDefault(); btn.click(); }
+});
+
 const uid = () => 'id' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayKey = (d=new Date()) => d.toISOString().slice(0,10);
 const escapeHtml = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -250,7 +265,7 @@ function openRenameShelfModal(){
   const html = `
     <h3>Dar um nome à sua estante</h3>
     <div class="sub">Assim como você nomeia um Kindle, dê um nome à sua estante — algo pessoal, só seu.</div>
-    <div class="field"><input id="in-shelf-name" maxlength="40" value="${escapeHtml(state.data.settings.shelfName || 'MY BOOKSHELF')}"></div>
+    <div class="field"><input id="in-shelf-name" maxlength="40" data-enter-submit="save-rename" value="${escapeHtml(state.data.settings.shelfName || 'MY BOOKSHELF')}"></div>
     <div class="modal-actions"><button class="btn btn-ghost" id="cancel-rename">Cancelar</button><button class="btn btn-primary" id="save-rename">Salvar</button></div>`;
   openModal(html);
   const input = document.getElementById('in-shelf-name');
@@ -261,7 +276,6 @@ function openRenameShelfModal(){
     state.data.settings.shelfName = v || 'MY BOOKSHELF';
     saveUserData(); renderShelfName(); closeModal();
   });
-  input.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('save-rename').click(); });
 }
 
 function addTileEl(){
@@ -280,6 +294,7 @@ function bookCardEl(b){
     <div class="book-cover">
       ${b.cover ? `<img src="${b.cover}">` : `<div class="gencover" style="background:${coverGradientFor(b.title)}"><div class="ttl">${escapeHtml(b.title)}</div>${b.author?`<div class="aut">${escapeHtml(b.author)}</div>`:''}</div>`}
       ${b.status==='concluido' ? '<div class="badge-finished">CONCLUÍDO</div>' : ''}
+      <button class="book-options-btn" title="Editar ou excluir este livro">⋮</button>
     </div>
     <div class="book-meta">
       <div class="title-wrap">
@@ -290,7 +305,67 @@ function bookCardEl(b){
       <div class="pct">${b.status==='concluido' ? '★'.repeat(b.rating||0) + '☆'.repeat(5-(b.rating||0)) : (pct>0? pct+'% lido' : 'Não iniciado')}</div>
     </div>`;
   card.addEventListener('click', ()=> openBook(b.id));
+  card.querySelector('.book-options-btn').addEventListener('click', (ev)=>{
+    ev.stopPropagation();
+    openBookOptionsModal(b.id);
+  });
   return card;
+}
+
+/* ==================================================================
+   EDITAR / EXCLUIR LIVRO
+   ================================================================== */
+function openBookOptionsModal(bookId){
+  const b = state.data.books[bookId];
+  const existingCollections = [...new Set(booksArray().map(x=>x.collection).filter(Boolean))];
+  const useColl = state.data.settings.useCollections;
+  const html = `
+    <h3>Editar livro</h3>
+    <div class="sub">Ajuste as informações ou remova este livro da sua estante.</div>
+    <div class="field"><label>Título</label><input id="edit-title" data-enter-submit="save-edit-book" value="${escapeHtml(b.title)}"></div>
+    <div class="field"><label>Autor</label><input id="edit-author" data-enter-submit="save-edit-book" value="${escapeHtml(b.author||'')}"></div>
+    ${useColl ? `
+    <div class="field">
+      <label>Coleção</label>
+      <input id="edit-collection" data-enter-submit="save-edit-book" list="edit-collections-datalist" value="${escapeHtml(b.collection||'')}" placeholder="Deixe em branco pra não organizar por coleção">
+      <datalist id="edit-collections-datalist">${existingCollections.map(c=>`<option value="${escapeHtml(c)}">`).join('')}</datalist>
+    </div>` : ''}
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-ghost" id="delete-book" style="color:var(--red);border-color:var(--red)">Excluir livro</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost" id="cancel-edit-book">Cancelar</button>
+        <button class="btn btn-primary" id="save-edit-book">Salvar</button>
+      </div>
+    </div>`;
+  openModal(html);
+  document.getElementById('cancel-edit-book').addEventListener('click', closeModal);
+  document.getElementById('save-edit-book').addEventListener('click', ()=>{
+    const title = document.getElementById('edit-title').value.trim();
+    if(!title) return;
+    b.title = title;
+    b.author = document.getElementById('edit-author').value.trim();
+    const collEl = document.getElementById('edit-collection');
+    if(collEl) b.collection = collEl.value.trim();
+    saveUserData(); closeModal(); renderShelf();
+  });
+  document.getElementById('delete-book').addEventListener('click', async ()=>{
+    if(!confirm('Excluir "'+b.title+'" da sua estante? Isso apaga o livro, os destaques, notas e marcadores dele. Não tem como desfazer.')) return;
+    const delBtn = document.getElementById('delete-book');
+    delBtn.disabled = true; delBtn.textContent = 'Excluindo…';
+    try{
+      if(b.format==='pdf' && b.filePath){
+        await sb.storage.from(BOOKS_BUCKET).remove([b.filePath]);
+      }
+      delete state.data.books[bookId];
+      saveUserData();
+      closeModal();
+      renderShelf();
+    }catch(err){
+      console.error(err);
+      alert('Não consegui excluir o livro: ' + err.message);
+      delBtn.disabled = false; delBtn.textContent = 'Excluir livro';
+    }
+  });
 }
 
 /* ==================================================================
@@ -307,12 +382,12 @@ function openAddBookModal(){
       <input type="file" id="file-input" accept=".pdf,.txt,.epub">
     </div>
     <div id="add-book-fields" class="hidden">
-      <div class="field"><label>Título</label><input id="in-title"></div>
-      <div class="field"><label>Autor (opcional)</label><input id="in-author"></div>
+      <div class="field"><label>Título</label><input id="in-title" data-enter-submit="confirm-add"></div>
+      <div class="field"><label>Autor (opcional)</label><input id="in-author" data-enter-submit="confirm-add"></div>
       ${useColl ? `
       <div class="field">
         <label>Coleção (opcional) — ex: Terror, Cadernos, Anotações</label>
-        <input id="in-collection" list="collections-datalist" placeholder="Deixe em branco pra não organizar por coleção">
+        <input id="in-collection" list="collections-datalist" data-enter-submit="confirm-add" placeholder="Deixe em branco pra não organizar por coleção">
         <datalist id="collections-datalist">${existingCollections.map(c=>`<option value="${escapeHtml(c)}">`).join('')}</datalist>
       </div>` : ''}
     </div>
@@ -511,6 +586,8 @@ async function renderPdfPage(num){
     span.style.left = tx[4]+'px';
     span.style.top = (tx[5]-fontHeight)+'px';
     span.style.fontSize = fontHeight+'px';
+    span.style.lineHeight = fontHeight+'px';
+    span.style.height = fontHeight+'px';
     span.style.fontFamily = 'sans-serif';
     span.style.transformOrigin = '0% 0%';
     tl.appendChild(span);
@@ -550,6 +627,22 @@ function pdfGoTo(delta){
 }
 
 /* ---- TXT ---- */
+function computeCharsPerPage(){
+  const pane = document.getElementById('text-pane');
+  const s = state.data.settings;
+  const style = getComputedStyle(pane);
+  const padX = parseFloat(style.paddingLeft||0) + parseFloat(style.paddingRight||0);
+  const padY = parseFloat(style.paddingTop||0) + parseFloat(style.paddingBottom||0);
+  const w = Math.max(200, (pane.clientWidth||680) - padX);
+  const h = Math.max(200, (pane.clientHeight||500) - padY);
+  const fontSize = s.fontSize || 19;
+  const lineHeight = s.lineHeight || 1.8;
+  const avgCharWidth = fontSize * 0.52; // aproximação razoável pra serifada/sem-serifa/legível
+  const lineHeightPx = fontSize * lineHeight;
+  const charsPerLine = Math.max(20, Math.floor(w / avgCharWidth));
+  const linesPerPage = Math.max(5, Math.floor(h / lineHeightPx));
+  return Math.max(400, charsPerLine * linesPerPage);
+}
 function paginateText(text, charsPerPage){
   const pages = []; let i=0;
   while(i < text.length){
@@ -561,8 +654,7 @@ function paginateText(text, charsPerPage){
   return pages.length? pages : [''];
 }
 function loadTxt(b){
-  const charsPerPage = 1600;
-  state.textPages = paginateText(b.fileData, charsPerPage);
+  state.textPages = paginateText(b.fileData, computeCharsPerPage());
   b.totalUnits = state.textPages.length;
   state.textPageIndex = Math.min((b.progress.location && b.progress.location.page)||0, state.textPages.length-1);
   renderTextPage();
@@ -578,9 +670,31 @@ function loadEpub(b){
 }
 function loadEpubChapterPages(){
   const ch = state.epubChapters[state.epubChapterIndex];
-  state.textPages = paginateText(ch.text, 1600);
+  state.textPages = paginateText(ch.text, computeCharsPerPage());
 }
 function currentPageText(){ return state.textPages[state.textPageIndex] || ''; }
+
+/* recalcula as páginas quando a fonte ou a janela mudam, tentando manter você
+   no mesmo trecho de leitura (não simplesmente joga pra página 1 de novo) */
+function repaginateCurrentText(){
+  const b = state.data.books[state.currentBookId];
+  if(!b || (b.format!=='txt' && b.format!=='epub')) return;
+  let offset = 0;
+  for(let i=0;i<state.textPageIndex;i++) offset += (state.textPages[i]||'').length;
+  const newCharsPerPage = computeCharsPerPage();
+  if(b.format==='txt'){
+    state.textPages = paginateText(b.fileData, newCharsPerPage);
+  } else {
+    state.textPages = paginateText(state.epubChapters[state.epubChapterIndex].text, newCharsPerPage);
+  }
+  let acc = 0, newIndex = state.textPages.length-1;
+  for(let i=0;i<state.textPages.length;i++){
+    acc += state.textPages[i].length;
+    if(offset < acc){ newIndex = i; break; }
+  }
+  state.textPageIndex = newIndex;
+  renderTextPage();
+}
 
 function renderTextPage(){
   const b = state.data.books[state.currentBookId];
@@ -907,9 +1021,9 @@ document.getElementById('btn-display').addEventListener('click', ()=>{
     <div class="modal-actions"><button class="btn btn-primary" id="close-display">Concluído</button></div>`;
   openModal(html);
   document.querySelectorAll('#seg-theme button').forEach(btn=>{ btn.classList.toggle('on', btn.dataset.v===s.theme); btn.addEventListener('click', ()=>{ s.theme=btn.dataset.v; saveUserData(); applyDisplaySettings(); document.querySelectorAll('#seg-theme button').forEach(x=>x.classList.toggle('on',x===btn)); }); });
-  document.querySelectorAll('#seg-font button').forEach(btn=>{ btn.classList.toggle('on', btn.dataset.v===s.font); btn.addEventListener('click', ()=>{ s.font=btn.dataset.v; saveUserData(); applyDisplaySettings(); document.querySelectorAll('#seg-font button').forEach(x=>x.classList.toggle('on',x===btn)); }); });
-  document.getElementById('range-size').addEventListener('input', e=>{ s.fontSize=+e.target.value; saveUserData(); applyDisplaySettings(); });
-  document.getElementById('range-lh').addEventListener('input', e=>{ s.lineHeight=+e.target.value; saveUserData(); applyDisplaySettings(); });
+  document.querySelectorAll('#seg-font button').forEach(btn=>{ btn.classList.toggle('on', btn.dataset.v===s.font); btn.addEventListener('click', ()=>{ s.font=btn.dataset.v; saveUserData(); applyDisplaySettings(); repaginateCurrentText(); document.querySelectorAll('#seg-font button').forEach(x=>x.classList.toggle('on',x===btn)); }); });
+  document.getElementById('range-size').addEventListener('input', e=>{ s.fontSize=+e.target.value; saveUserData(); applyDisplaySettings(); repaginateCurrentText(); });
+  document.getElementById('range-lh').addEventListener('input', e=>{ s.lineHeight=+e.target.value; saveUserData(); applyDisplaySettings(); repaginateCurrentText(); });
   document.getElementById('close-display').addEventListener('click', closeModal);
 });
 function applyDisplaySettings(){
@@ -1014,12 +1128,19 @@ document.getElementById('btn-wipe').addEventListener('click', async ()=>{
   renderShelf(); renderStats();
 });
 
-/* resize handling para pdf */
+/* resize handling: PDF reflui a página, TXT/EPUB repagina (com um pequeno atraso
+   pra não recalcular a cada pixel enquanto a janela ainda está sendo arrastada) */
+let resizeDebounce = null;
 window.addEventListener('resize', ()=>{
-  if(document.getElementById('view-reader').classList.contains('active')){
-    const b = state.data.books[state.currentBookId];
-    if(b && b.format==='pdf' && state.pdfDoc) renderPdfPage(state.pdfPageNum);
+  if(!document.getElementById('view-reader').classList.contains('active')) return;
+  const b = state.data.books[state.currentBookId];
+  if(!b) return;
+  if(b.format==='pdf'){
+    if(state.pdfDoc) renderPdfPage(state.pdfPageNum);
+    return;
   }
+  clearTimeout(resizeDebounce);
+  resizeDebounce = setTimeout(()=> repaginateCurrentText(), 250);
 });
 window.addEventListener('beforeunload', ()=>{ saveCurrentProgress(); saveUserData(); });
 
