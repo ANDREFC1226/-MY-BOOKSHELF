@@ -8,8 +8,8 @@ if(window.pdfjsLib){
 /* ==================================================================
    SUPABASE — preencha com os dados do SEU projeto (Settings > API)
    ================================================================== */
-const SUPABASE_URL = 'https://aohdaegzviyqbwejwwfq.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_aXMcNtIdJZGBoRVUkyI74Q_VBevt3cg';
+const SUPABASE_URL = 'COLOQUE_AQUI_A_PROJECT_URL';
+const SUPABASE_ANON_KEY = 'COLOQUE_AQUI_A_ANON_PUBLIC_KEY';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const BOOKS_BUCKET = 'livros';
 
@@ -21,7 +21,7 @@ async function loadUserData(){
   const { data, error } = await sb.from('user_data').select('data').eq('user_id', state.userId).maybeSingle();
   if(error){ console.error('Erro ao carregar dados', error); }
   if(data && data.data) return data.data;
-  return { books:{}, settings:{ theme:'claro', font:'serif', fontSize:19, lineHeight:1.8, goal:20, shelfName:'Estante' }, stats:{ totalMinutes:0, dailyLog:{} } };
+  return { books:{}, settings:{ theme:'claro', font:'serif', fontSize:19, lineHeight:1.8, goal:20, shelfName:'MY BOOKSHELF', useCollections:false }, stats:{ totalMinutes:0, dailyLog:{} } };
 }
 function saveUserData(){
   if(!state.userId) return;
@@ -47,6 +47,7 @@ const state = {
   readTimerHandle:null,
   readSecondsThisSession:0,
   sideMode:null,
+  highlightMode:false,
 };
 
 /* ==================================================================
@@ -117,11 +118,12 @@ async function afterAuth(){
   state.userId = user.id;
   state.userEmail = user.email;
   state.data = await loadUserData();
-  if(!state.data.settings.shelfName) state.data.settings.shelfName = 'Estante';
+  if(!state.data.settings.shelfName) state.data.settings.shelfName = 'MY BOOKSHELF';
   document.getElementById('screen-login').style.display='none';
   document.getElementById('screen-app').classList.add('active');
   document.getElementById('acc-name').textContent = state.userEmail;
   document.getElementById('in-goal').value = String(state.data.settings.goal || 20);
+  document.getElementById('in-use-collections').checked = !!state.data.settings.useCollections;
   renderShelfName();
   renderShelf();
   renderStats();
@@ -208,7 +210,31 @@ function renderShelf(){
   grid.style.borderBottom='none';
   list.forEach(b=> grid.appendChild(bookCardEl(b)));
   wrap.innerHTML='';
-  wrap.appendChild(grid);
+
+  if(state.data.settings.useCollections){
+    const groups = {};
+    list.forEach(b=>{
+      const key = b.collection || 'Sem coleção';
+      (groups[key] = groups[key] || []).push(b);
+    });
+    const names = Object.keys(groups).filter(n=>n!=='Sem coleção').sort((a,c)=>a.localeCompare(c));
+    if(groups['Sem coleção']) names.push('Sem coleção');
+    names.forEach(name=>{
+      const section = document.createElement('div');
+      section.className = 'shelf-section';
+      const title = document.createElement('div');
+      title.className = 'shelf-section-title';
+      title.textContent = name + ' · ' + groups[name].length;
+      const sectionGrid = document.createElement('div');
+      sectionGrid.className = 'shelf-grid';
+      groups[name].forEach(b=> sectionGrid.appendChild(bookCardEl(b)));
+      section.appendChild(title);
+      section.appendChild(sectionGrid);
+      wrap.appendChild(section);
+    });
+  } else {
+    wrap.appendChild(grid);
+  }
 }
 ['shelf-search','shelf-filter','shelf-sort'].forEach(id=>{
   document.getElementById(id).addEventListener('input', renderShelf);
@@ -218,13 +244,13 @@ document.getElementById('btn-add-book-top').addEventListener('click', openAddBoo
 document.getElementById('btn-rename-shelf').addEventListener('click', openRenameShelfModal);
 
 function renderShelfName(){
-  document.getElementById('shelf-name').textContent = (state.data.settings.shelfName || 'Estante');
+  document.getElementById('shelf-name').textContent = (state.data.settings.shelfName || 'MY BOOKSHELF');
 }
 function openRenameShelfModal(){
   const html = `
     <h3>Dar um nome à sua estante</h3>
     <div class="sub">Assim como você nomeia um Kindle, dê um nome à sua estante — algo pessoal, só seu.</div>
-    <div class="field"><input id="in-shelf-name" maxlength="40" value="${escapeHtml(state.data.settings.shelfName || 'Estante')}"></div>
+    <div class="field"><input id="in-shelf-name" maxlength="40" value="${escapeHtml(state.data.settings.shelfName || 'MY BOOKSHELF')}"></div>
     <div class="modal-actions"><button class="btn btn-ghost" id="cancel-rename">Cancelar</button><button class="btn btn-primary" id="save-rename">Salvar</button></div>`;
   openModal(html);
   const input = document.getElementById('in-shelf-name');
@@ -232,7 +258,7 @@ function openRenameShelfModal(){
   document.getElementById('cancel-rename').addEventListener('click', closeModal);
   document.getElementById('save-rename').addEventListener('click', ()=>{
     const v = input.value.trim();
-    state.data.settings.shelfName = v || 'Estante';
+    state.data.settings.shelfName = v || 'MY BOOKSHELF';
     saveUserData(); renderShelfName(); closeModal();
   });
   input.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('save-rename').click(); });
@@ -254,10 +280,12 @@ function bookCardEl(b){
     <div class="book-cover">
       ${b.cover ? `<img src="${b.cover}">` : `<div class="gencover" style="background:${coverGradientFor(b.title)}"><div class="ttl">${escapeHtml(b.title)}</div>${b.author?`<div class="aut">${escapeHtml(b.author)}</div>`:''}</div>`}
       ${b.status==='concluido' ? '<div class="badge-finished">CONCLUÍDO</div>' : ''}
-      <div class="progress-strip"><i style="width:${pct}%"></i></div>
     </div>
     <div class="book-meta">
-      <div class="t">${escapeHtml(b.title)}</div>
+      <div class="title-wrap">
+        <div class="t">${escapeHtml(b.title)}</div>
+        <div class="mini-progress"><i style="width:${pct}%"></i></div>
+      </div>
       <div class="a">${escapeHtml(b.author||'Autor desconhecido')}</div>
       <div class="pct">${b.status==='concluido' ? '★'.repeat(b.rating||0) + '☆'.repeat(5-(b.rating||0)) : (pct>0? pct+'% lido' : 'Não iniciado')}</div>
     </div>`;
@@ -269,6 +297,8 @@ function bookCardEl(b){
    ADICIONAR LIVRO
    ================================================================== */
 function openAddBookModal(){
+  const useColl = state.data.settings.useCollections;
+  const existingCollections = [...new Set(booksArray().map(b=>b.collection).filter(Boolean))];
   const html = `
     <h3>Adicionar livro</h3>
     <div class="sub">Formatos aceitos: PDF, TXT e EPUB (o EPUB é lido como texto simples, sem imagens).</div>
@@ -279,6 +309,12 @@ function openAddBookModal(){
     <div id="add-book-fields" class="hidden">
       <div class="field"><label>Título</label><input id="in-title"></div>
       <div class="field"><label>Autor (opcional)</label><input id="in-author"></div>
+      ${useColl ? `
+      <div class="field">
+        <label>Coleção (opcional) — ex: Terror, Cadernos, Anotações</label>
+        <input id="in-collection" list="collections-datalist" placeholder="Deixe em branco pra não organizar por coleção">
+        <datalist id="collections-datalist">${existingCollections.map(c=>`<option value="${escapeHtml(c)}">`).join('')}</datalist>
+      </div>` : ''}
     </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="cancel-add">Cancelar</button>
@@ -307,7 +343,8 @@ function openAddBookModal(){
     if(!pendingFile) return;
     const btn = document.getElementById('confirm-add');
     btn.disabled = true; btn.textContent = 'Processando…';
-    try{ await addBookFromFile(pendingFile, document.getElementById('in-title').value.trim(), document.getElementById('in-author').value.trim()); closeModal(); renderShelf(); }
+    const collectionEl = document.getElementById('in-collection');
+    try{ await addBookFromFile(pendingFile, document.getElementById('in-title').value.trim(), document.getElementById('in-author').value.trim(), collectionEl ? collectionEl.value.trim() : ''); closeModal(); renderShelf(); }
     catch(err){ console.error(err); alert('Não consegui processar esse arquivo: ' + err.message); btn.disabled=false; btn.textContent='Adicionar à estante'; }
   });
 }
@@ -316,11 +353,12 @@ function fileToDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReade
 function fileToText(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsText(f); }); }
 function fileToArrayBuffer(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsArrayBuffer(f); }); }
 
-async function addBookFromFile(file, title, author){
+async function addBookFromFile(file, title, author, collection){
   const ext = file.name.split('.').pop().toLowerCase();
   const id = uid();
   const book = {
     id, title: title||file.name, author: author||'', format: ext, addedAt: Date.now(),
+    collection: collection || '',
     cover:null, status:'naoiniciado', favorito:false, rating:0, review:'',
     progress:{ percent:0, location:null }, highlights:[], notes:[], bookmarks:[], finishedAt:null
   };
@@ -400,6 +438,7 @@ async function openBook(id){
   document.getElementById('pdf-pane-outer').classList.add('hidden');
   closeSide();
   applyDisplaySettings();
+  setHighlightMode(false);
 
   if(b.format==='pdf'){
     document.getElementById('pdf-pane-outer').classList.remove('hidden');
@@ -414,6 +453,16 @@ async function openBook(id){
   startReadTimer();
   bumpStreak();
 }
+
+/* ---- modo de destaque: enquanto desligado, selecionar texto é só pra copiar/ler,
+   nunca cria destaque sem querer. Precisa ligar de propósito pra destacar. ---- */
+function setHighlightMode(on){
+  state.highlightMode = on;
+  const btn = document.getElementById('btn-highlight-mode');
+  btn.classList.toggle('active', on);
+  document.getElementById('reader-page-area').classList.toggle('highlight-mode-on', on);
+}
+document.getElementById('btn-highlight-mode').addEventListener('click', ()=> setHighlightMode(!state.highlightMode));
 document.getElementById('btn-back-shelf').addEventListener('click', ()=>{
   saveCurrentProgress();
   stopReadTimer();
@@ -452,7 +501,9 @@ async function renderPdfPage(num){
   const textContent = await page.getTextContent();
   const tl = document.getElementById('pdf-textlayer');
   tl.innerHTML=''; tl.style.width=viewport.width+'px'; tl.style.height=viewport.height+'px';
+  const scaleFactor = Math.hypot(viewport.transform[0], viewport.transform[1]) || 1;
   textContent.items.forEach(item=>{
+    if(!item.str) return; // pula itens vazios (só espaçamento), não geram span
     const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
     const fontHeight = Math.hypot(tx[2],tx[3]);
     const span = document.createElement('span');
@@ -461,7 +512,16 @@ async function renderPdfPage(num){
     span.style.top = (tx[5]-fontHeight)+'px';
     span.style.fontSize = fontHeight+'px';
     span.style.fontFamily = 'sans-serif';
+    span.style.transformOrigin = '0% 0%';
     tl.appendChild(span);
+    // a fonte invisível (sans-serif) quase nunca tem a mesma largura da fonte real do PDF.
+    // sem isso, arrastar o mouse pra selecionar não bate com o texto visível e "pula"
+    // perto do fim da linha/parágrafo — por isso esticamos o span pra largura certa.
+    const expectedWidth = (item.width || 0) * scaleFactor;
+    const measuredWidth = span.getBoundingClientRect().width;
+    if(expectedWidth > 0 && measuredWidth > 0.5){
+      span.style.transform = 'scaleX(' + (expectedWidth / measuredWidth) + ')';
+    }
   });
   state.pdfPageCache[num] = {textContent, viewport};
   state.pdfPageNum = num;
@@ -615,6 +675,7 @@ document.addEventListener('mouseup', (e)=>{
     if(!sel || sel.isCollapsed || !sel.toString().trim()){ selToolbar.style.display='none'; return; }
     const b = state.data.books[state.currentBookId];
     if(!b || !document.getElementById('view-reader').classList.contains('active')){ return; }
+    if(!state.highlightMode){ selToolbar.style.display='none'; return; } // seleção livre pra copiar/ler, sem destacar sem querer
     const range = sel.getRangeAt(0);
     if(b.format==='pdf'){
       const tl = document.getElementById('pdf-textlayer');
@@ -933,6 +994,7 @@ function renderStats(){
     <div><div style="font-family:'Fraunces',serif;font-size:16px;">Meta diária: ${goal} min</div><div style="color:var(--muted);font-size:12.5px;margin-top:3px;">Hoje você leu ${todayMin} min. ${todayMin>=goal?'Meta batida — bom trabalho! 🎉':'Continue lendo para bater a meta de hoje.'}</div></div>`;
 }
 document.getElementById('in-goal').addEventListener('change', e=>{ state.data.settings.goal = +e.target.value; saveUserData(); renderStats(); });
+document.getElementById('in-use-collections').addEventListener('change', e=>{ state.data.settings.useCollections = e.target.checked; saveUserData(); renderShelf(); });
 
 /* ==================================================================
    CONFIGURAÇÕES: EXPORTAR / APAGAR
