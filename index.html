@@ -34,7 +34,7 @@
     <div class="rail-brand"><div class="lamp"></div></div>
     <button class="rail-btn active" data-view="shelf">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v16M9 4v16M14 4l4 16M20 4v16"/></svg>
-      Estante
+      Livros
     </button>
     <button class="rail-btn" data-view="stats">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
@@ -58,7 +58,7 @@
       <div class="view-header shelf-header">
         <div class="shelf-brand-row">
           <div class="shelf-name-edit">
-            <h1 id="shelf-name">Estante</h1>
+            <h1 id="shelf-name">MY BOOKSHELF</h1>
             <button class="btn-rename" id="btn-rename-shelf" title="Dar um nome à sua estante">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>
             </button>
@@ -119,6 +119,9 @@
         <div class="settings-row"><div><div>Meta diária de leitura</div><div class="d">Usada na tela de estatísticas</div></div>
           <select class="filter" id="in-goal"><option value="10">10 min</option><option value="20">20 min</option><option value="30">30 min</option><option value="60">60 min</option></select>
         </div>
+        <div class="settings-row"><div><div>Organizar por coleções</div><div class="d">Agrupa os livros em seções (ex: Terror, Cadernos, Anotações) em vez de uma estante única</div></div>
+          <input type="checkbox" id="in-use-collections" style="width:18px;height:18px;accent-color:var(--brass);">
+        </div>
         <div class="settings-row"><div><div>Apagar todos os dados desta conta</div><div class="d">Ação permanente — remove seus livros da nuvem também</div></div><button class="btn btn-ghost" id="btn-wipe" style="color:var(--red);border-color:var(--red)">Apagar</button></div>
       </div>
       <div class="settings-block">
@@ -139,6 +142,9 @@
           </button>
           <button class="icon-btn" id="btn-search" title="Buscar no livro">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-highlight-mode" title="Ativar modo de destaque (selecionar texto só destaca quando isso estiver ligado)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l6-6 4 4-6 6-4-4z"/><path d="M4 20l3-1 8-8-2-2-8 8-1 3z"/></svg>
           </button>
           <div class="reader-title"><b id="reader-title-b"></b></div>
           <button class="icon-btn" id="btn-tts" title="Ouvir esta página">
