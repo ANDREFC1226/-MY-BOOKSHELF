@@ -435,6 +435,47 @@ function fileToDataURL(f){ return new Promise((res,rej)=>{ const r=new FileReade
 function fileToText(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsText(f); }); }
 function fileToArrayBuffer(f){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsArrayBuffer(f); }); }
 
+/* Upload "resumível" (protocolo TUS) — a Supabase recomenda isso pra qualquer
+   arquivo acima de 6MB, porque consegue retomar de onde parou se a internet
+   cair no meio do envio, em vez de precisar recomeçar do zero. O limite de
+   TAMANHO em si continua sendo o mesmo configurado no projeto Supabase
+   (50MB é o teto do plano gratuito) — isso aqui só torna o envio mais confiável,
+   não aumenta o limite. */
+function uploadPdfResumable(file, path, onProgress){
+  return new Promise((resolve, reject)=>{
+    sb.auth.getSession().then(({data:{session}})=>{
+      if(!session){ reject(new Error('Sua sessão expirou, entre novamente.')); return; }
+      const projectId = SUPABASE_URL.replace(/^https?:\/\//,'').split('.')[0];
+      const upload = new tus.Upload(file, {
+        endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        headers: {
+          authorization: `Bearer ${session.access_token}`,
+          'x-upsert': 'true',
+        },
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        metadata: {
+          bucketName: BOOKS_BUCKET,
+          objectName: path,
+          contentType: file.type || 'application/pdf',
+          cacheControl: '3600',
+        },
+        chunkSize: 6 * 1024 * 1024, // fixo em 6MB, exigido pelo protocolo TUS da Supabase
+        onError: (error)=> reject(error),
+        onProgress: (bytesUploaded, bytesTotal)=>{
+          if(onProgress) onProgress(Math.round((bytesUploaded/bytesTotal)*100));
+        },
+        onSuccess: ()=> resolve(),
+      });
+      upload.findPreviousUploads().then(previous=>{
+        if(previous.length) upload.resumeFromPreviousUpload(previous[0]);
+        upload.start();
+      }).catch(reject);
+    }).catch(reject);
+  });
+}
+
 async function addBookFromFile(file, title, author, collection){
   const ext = file.name.split('.').pop().toLowerCase();
   const id = uid();
@@ -456,8 +497,10 @@ async function addBookFromFile(file, title, author, collection){
       book.totalUnits = pdf.numPages;
     }catch(e){ console.warn('capa pdf falhou', e); }
     const path = `${state.userId}/${id}.pdf`;
-    const { error: upErr } = await sb.storage.from(BOOKS_BUCKET).upload(path, file, { upsert:true, contentType:'application/pdf' });
-    if(upErr) throw upErr;
+    await uploadPdfResumable(file, path, (pct)=>{
+      const btn = document.getElementById('confirm-add');
+      if(btn) btn.textContent = 'Enviando… ' + pct + '%';
+    });
     book.filePath = path; // o arquivo em si fica no Storage, só o caminho vai no jsonb
   } else if(ext==='txt'){
     book.fileData = await fileToText(file);
