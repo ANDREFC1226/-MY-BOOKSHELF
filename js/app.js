@@ -116,6 +116,9 @@ document.getElementById('btn-login').addEventListener('click', async ()=>{
       if(error){ elErr.textContent = traduzErroAuth(error.message); return; }
     }
     await afterAuth();
+  } catch(networkErr){
+    console.error('Erro de rede/conexão no login:', networkErr);
+    elErr.textContent = 'Não consegui conectar ao Supabase agora (' + networkErr.message + '). Confira se o projeto está ativo (não pausado) e tente de novo.';
   } finally {
     btn.disabled = false;
   }
@@ -155,8 +158,12 @@ async function doLogout(){
 
 // mantém a sessão entre visitas (o Supabase guarda o token sozinho)
 (async function autoLogin(){
-  const { data:{ session } } = await sb.auth.getSession();
-  if(session) await afterAuth();
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session) await afterAuth();
+  }catch(err){
+    console.error('Erro ao verificar sessão salva:', err);
+  }
 })();
 
 /* ==================================================================
